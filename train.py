@@ -11,7 +11,7 @@ import metrics
 import utils
 import matplotlib.pyplot as plt 
 
-ARG_graph_path = "data/npz/ms_academic_phy.npz"
+ARG_graph_path = "data/npz/cora_full.npz"
 ARG_architecture = [64]; 
 ARG_collapse_regularization = 1; 
 ARG_dropout_rate = 0; 
@@ -138,9 +138,9 @@ def main(argv):
   plt.xlabel('Iterations')
   plt.ylabel('Loss')
   plt.title('Training Loss Over Epochs')
-  plt.grid(False)  # Add grid lines
+  plt.grid(True)  # Add grid lines
   plt.legend()
-  plt.savefig('training_loss_plot_4.png')
+  plt.savefig('corafull3.png')
   plt.show()  # Prints some metrics used in the paper.
   print('Conductance:', metrics.conductance(adjacency, clusters))
   print('Modularity:', metrics.modularity(adjacency, clusters))
