@@ -83,12 +83,6 @@ class DMoN(tf.keras.layers.Layer):
     """
     features, adjacency = inputs
 
-    assert isinstance(features, tf.Tensor)
-    assert isinstance(adjacency, tf.SparseTensor)
-    assert len(features.shape) == 2
-    assert len(adjacency.shape) == 2
-    assert features.shape[0] == adjacency.shape[0]
-
     assignments = tf.nn.softmax(self.transform(features), axis=1)
     cluster_sizes = tf.math.reduce_sum(assignments, axis=0)  # Size [k].
     assignments_pooling = assignments / cluster_sizes  # Size [n, k].

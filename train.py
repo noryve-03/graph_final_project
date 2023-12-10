@@ -1,85 +1,23 @@
-# coding=utf-8
-# Copyright 2023 The Google Research Authors.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-r"""Graph Clustering with Graph Neural Networks.
-
-===============================
-This is the implementation of our paper,
-[Graph Clustering with Graph Neural Networks]
-(https://arxiv.org/abs/2006.16904).
-
-The included code creates a DMoN (Deep Modularity Network) as introduced in the
-paper.
-
-Example execution to reproduce the results from the paper.
-------
-# From google-research/
-python3 -m graph_embedding.dmon.train \
---graph_path=graph_embedding/dmon/data/cora.npz --dropout_rate=0.5
-"""
-from typing import Tuple
-from absl import app
-from absl import flags
-import numpy as np
 import scipy.sparse
-from scipy.sparse import base
+from typing import Tuple
+import tensorflow as tf
+from absl import app
 import sklearn.metrics
-import tensorflow.compat.v2 as tf
+import numpy as np
+from scipy.sparse import base
 import dmon
 import gcn
 import metrics
 import utils
-tf.compat.v1.enable_v2_behavior()
+import matplotlib.pyplot as plt 
 
-FLAGS = flags.FLAGS
-
-flags.DEFINE_string(
-    'graph_path',
-    None,
-    'Input graph path.')
-flags.DEFINE_list(
-    'architecture',
-    [64],
-    'Network architecture in the format `a,b,c,d`.')
-flags.DEFINE_float(
-    'collapse_regularization',
-    1,
-    'Collapse regularization.',
-    lower_bound=0)
-flags.DEFINE_float(
-    'dropout_rate',
-    0,
-    'Dropout rate for GNN representations.',
-    lower_bound=0,
-    upper_bound=1)
-flags.DEFINE_integer(
-    'n_clusters',
-    16,
-    'Number of clusters.',
-    lower_bound=0)
-flags.DEFINE_integer(
-    'n_epochs',
-    1000,
-    'Number of epochs.',
-    lower_bound=0)
-flags.DEFINE_float(
-    'learning_rate',
-    0.001,
-    'Learning rate.',
-    lower_bound=0)
-
+ARG_graph_path = "data/npz/ms_academic_phy.npz"
+ARG_architecture = [64]; 
+ARG_collapse_regularization = 1; 
+ARG_dropout_rate = 0; 
+ARG_n_clusters = 16; 
+ARG_n_epochs = 1000; 
+ARG_learning_rate = 0.01; 
 
 def load_npz(
     filename
@@ -101,12 +39,14 @@ def load_npz(
         shape=loader['adj_shape'])
 
     features = scipy.sparse.csr_matrix(
-        (loader['feature_data'], loader['feature_indices'],
-         loader['feature_indptr']),
-        shape=loader['feature_shape'])
+        (loader['attr_data'], loader['attr_indices'],
+         loader['attr_indptr']),
+        shape=loader['attr_shape'])
 
-    label_indices = loader['label_indices']
+    
     labels = loader['labels']
+    label_indices =  [i for i in range(len(labels))] 
+    label_indices = np.asarray(label_indices)
   assert adjacency.shape[0] == features.shape[
       0], 'Adjacency and feature size must be equal!'
   assert labels.shape[0] == label_indices.shape[
@@ -144,23 +84,21 @@ def build_dmon(input_features,
     Built Keras DMoN model.
   """
   output = input_features
-  for n_channels in FLAGS.architecture:
+  for n_channels in ARG_architecture:
     output = gcn.GCN(n_channels)([output, input_graph])
   pool, pool_assignment = dmon.DMoN(
-      FLAGS.n_clusters,
-      collapse_regularization=FLAGS.collapse_regularization,
-      dropout_rate=FLAGS.dropout_rate)([output, input_adjacency])
+      ARG_n_clusters,
+      collapse_regularization=ARG_collapse_regularization,
+      dropout_rate=ARG_dropout_rate)([output, input_adjacency])
   return tf.keras.Model(
       inputs=[input_features, input_graph, input_adjacency],
       outputs=[pool, pool_assignment])
 
 
 def main(argv):
-  if len(argv) > 1:
-    raise app.UsageError('Too many command-line arguments.')
   # Load and process the data (convert node features to dense, normalize the
   # graph, convert it to Tensorflow sparse tensor.
-  adjacency, features, labels, label_indices = load_npz(FLAGS.graph_path)
+  adjacency, features, labels, label_indices = load_npz(ARG_graph_path)
   features = features.todense()
   n_nodes = adjacency.shape[0]
   feature_size = features.shape[1]
@@ -182,21 +120,28 @@ def main(argv):
       loss_value = sum(model.losses)
     return model.losses, tape.gradient(loss_value, model.trainable_variables)
 
-  optimizer = tf.keras.optimizers.Adam(FLAGS.learning_rate)
+  optimizer = tf.keras.optimizers.Adam(ARG_learning_rate)
   model.compile(optimizer, None)
-
-  for epoch in range(FLAGS.n_epochs):
+  loss_history = []
+  for epoch in range(ARG_n_epochs):
     loss_values, grads = grad(model, [features, graph_normalized, graph])
     optimizer.apply_gradients(zip(grads, model.trainable_variables))
     print(f'epoch {epoch}, losses: ' +
           ' '.join([f'{loss_value.numpy():.4f}' for loss_value in loss_values]))
-
+    loss_history.append(loss_values[0])
   # Obtain the cluster assignments.
   _, assignments = model([features, graph_normalized, graph], training=False)
   assignments = assignments.numpy()
   clusters = assignments.argmax(axis=1)  # Convert soft to hard clusters.
-
-  # Prints some metrics used in the paper.
+  plt.figure(figsize=(10, 7))
+  plt.plot(loss_history, color='green', label='Loss')  # Change color here
+  plt.xlabel('Iterations')
+  plt.ylabel('Loss')
+  plt.title('Training Loss Over Epochs')
+  plt.grid(False)  # Add grid lines
+  plt.legend()
+  plt.savefig('training_loss_plot_4.png')
+  plt.show()  # Prints some metrics used in the paper.
   print('Conductance:', metrics.conductance(adjacency, clusters))
   print('Modularity:', metrics.modularity(adjacency, clusters))
   print(
