@@ -11,7 +11,7 @@ import metrics
 import utils
 import matplotlib.pyplot as plt 
 
-ARG_graph_path = "data/npz/cora_full.npz"
+ARG_graph_path = "data/npz/cora_full.npz" # Path to the training graph
 ARG_architecture = [64]; 
 ARG_collapse_regularization = 1; 
 ARG_dropout_rate = 0; 
